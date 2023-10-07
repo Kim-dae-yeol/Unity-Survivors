@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.kdy.environment": {
+      "version": "https://github.com/Kim-dae-yeol/unity-environment.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "07cfe82582bf6c0a4d07e595be2f54a0c3202155"
+    },
     "com.unity.2d.animation": {
       "version": "9.0.3",
       "depth": 1,
