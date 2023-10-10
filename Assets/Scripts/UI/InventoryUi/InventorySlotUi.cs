@@ -1,9 +1,11 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace UI.InventoryUi
 {
     public class InventorySlotUi : UiPopup
     {
-        [field: SerializeField] public RectTransform ImageTransform { get; private set; }
+        [field: SerializeField] public Image ImageTransform { get; private set; }
+        
     }
 }
