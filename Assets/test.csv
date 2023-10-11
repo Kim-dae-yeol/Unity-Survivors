@@ -1,6 +1,7 @@
-name,description,require_level,require_x,require_y,damage
-kim,kimkim,12,3,2,100
-kim,kimkim,12,3,2,100
-kim,kimkim,12,3,2,100
-kim,kimkim,12,3,2,100
-kim,kimkim,12,3,2,100
+Row,Col,Type,Width,Height,ItemName,ItemDesc,MinDamage,MaxDamage
+0,0,0,1,3,Sword,긴 검이다.,1,3
+0,1,0,1,3,Sword,긴 검이다.,1,3
+0,2,0,1,3,Sword,긴 검이다.,1,3
+0,3,0,1,3,Sword,긴 검이다.,1,3
+0,4,0,1,3,Sword,긴 검이다.,1,3
+3,0,0,1,1,Sword,긴 검이다.,1,3

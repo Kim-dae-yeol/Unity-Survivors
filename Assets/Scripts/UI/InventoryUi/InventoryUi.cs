@@ -1,27 +1,36 @@
 using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace UI.InventoryUi
 {
-    public class InventoryUi : UiPopup, IPointerMoveHandler
+    public class InventoryUi : UiPopup,IDragHandler,IBeginDragHandler,IEndDragHandler
     {
-        public Action<Vector2> OnMovePointer;
-        private InventorySlotLayoutUi _slotLayoutUi;
-        protected override void Awake()
-        {
-            base.Awake();
-            _slotLayoutUi = GetComponentInChildren<InventorySlotLayoutUi>();
-        }
+        [SerializeField] private Button closeButton;
 
         private void Start()
         {
-            OnMovePointer += _slotLayoutUi.OnPointerMove;
+            closeButton.onClick.AddListener(CloseInventory);
         }
 
-        public void OnPointerMove(PointerEventData eventData)
+        private void CloseInventory()
         {
-            OnMovePointer?.Invoke(eventData.position);
+            transform.root.gameObject.SetActive(false);
+        }
+        public void OnDrag(PointerEventData eventData)
+        {
+            
+        }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            
         }
     }
 }

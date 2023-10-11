@@ -5,7 +5,6 @@ using DE.Util;
 using Di;
 using Managers;
 using Model.Item;
-using Model.LevelDesign;
 using UnityEngine;
 using Util;
 
@@ -15,6 +14,7 @@ public class GameManager : MonoBehaviour
     private static GameManager _instance;
     private UiManager _uiManager;
     public InventoryManager InventoryManager { get; private set; }
+    private DataManager _dataManager = new DataManager();
 
     public static GameManager Instance
     {
@@ -55,41 +55,19 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         //todo load ui per scene
-        _uiManager.ShowPopupByName("InteractableUi");
-        LoadDataSetFromCsv();
-    }
-
-    private static void LoadDataSetFromCsv()
-    {
-        List<TestData> testDataSet = CsvReader.ReadCsv<TestData>("test.csv", 1);
-        foreach (var testData in testDataSet)
-        {
-            Debug.Log($"testData is {testData.ToStringForLogging()}");
-        }
-        //todo 
+        // _uiManager.ShowPopupByName("InteractableUi");
     }
 
     private List<InventoryItem> GetItems()
     {
-        List<InventoryItem> items = new List<InventoryItem>();
-        for (int i = 0; i < 2; i++)
-        {
-            InventoryItem inventoryItem = new InventoryItem();
-            inventoryItem.Row = 0;
-            inventoryItem.Col = i;
-            Item item = new Item(
-                type: Item.ItemType.Weapon,
-                width: 1,
-                height: 3,
-                itemName: "Long Sword",
-                itemDesc: "very long sword",
-                minDamage: 1,
-                maxDamage: 3
-            );
-            inventoryItem.Item = item;
-            items.Add(inventoryItem);
-        }
+        List<InventoryItem> items = _dataManager.LoadTestDataSet();
 
         return items;
+    }
+
+    public void DropInventoryItem(int index)
+    {
+        //todo if dungeon drop item shown
+        InventoryManager.RemoveItemAt(index);
     }
 }

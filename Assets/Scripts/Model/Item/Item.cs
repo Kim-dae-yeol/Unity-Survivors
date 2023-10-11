@@ -13,6 +13,7 @@ namespace Model.Item
             Belt,
             Shoes,
         }
+        
         public ItemType Type;
         public int Width;
         public int Height;

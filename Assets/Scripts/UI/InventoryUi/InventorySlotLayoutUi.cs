@@ -1,79 +1,90 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using Managers;
 using Model.Item;
 using UI;
 using UI.InventoryUi;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using Util;
-
 
 public class InventorySlotLayoutUi : UiPopup
 {
-    private struct HoverInfo
-    {
-        public int Row;
-        public int Col;
-    }
-
     [SerializeField] private int maxRows;
     [SerializeField] private int maxCols;
     [SerializeField] private RectTransform items;
-    
+
     [SerializeField] private Color canPositionColor = Color.green;
     [SerializeField] private Color canNotPositionColor = Color.red;
-    private int _cellCount;
+
     private GridLayoutGroup _gridLayout;
-    private List<InventorySlotUi> _slots = new List<InventorySlotUi>();
+    private InventorySlotUi[,] _slots;
+    private int[,] _itemIndexOnSlot;
+    private bool _isChanged;
+
 
     //uiState
-    private InventoryItemUi _selectedItem;
+    private Item _selectedItemData;
     private Vector2 _screenPoint;
-    private HoverInfo _hoverInfo;
+    private Vector2Int _hoverInfo;
+    private Vector2Int _selectedItemStartIndex;
 
     private InventoryManager _inventoryManager;
+    private GameManager _gameManager;
 
     protected override void Awake()
     {
         base.Awake();
+        _gameManager = GameManager.Instance;
         _gridLayout = GetComponent<GridLayoutGroup>();
     }
 
     private void Start()
     {
         _inventoryManager = GameManager.Instance.InventoryManager;
-        _cellCount = maxRows * maxCols;
-        for (int i = 0; i < _cellCount; i++)
+        _slots = new InventorySlotUi[maxRows, maxCols];
+        _itemIndexOnSlot = new int[maxRows, maxCols];
+
+        for (int i = 0; i < maxRows; i++)
         {
-            InventorySlotUi slot = UiManager.ShowPopupByName(nameof(InventorySlotUi)).GetComponent<InventorySlotUi>();
-            slot.transform.SetParent(_gridLayout.transform, false);
-            _slots.Add(slot.GetComponent<InventorySlotUi>());
+            for (int j = 0; j < maxCols; j++)
+            {
+                InventorySlotUi slot = UiManager.ShowPopupByName(nameof(InventorySlotUi))
+                    .GetComponent<InventorySlotUi>();
+                slot.transform.SetParent(_gridLayout.transform, false);
+
+                _slots[i, j] = slot.GetComponent<InventorySlotUi>();
+                _itemIndexOnSlot[i, j] = -1;
+            }
         }
 
         CreateItems();
     }
 
-
     private void CreateItems()
     {
-        foreach (var item in _inventoryManager.Items)
+        foreach ((InventoryItem item, int index) in _inventoryManager.Items.Select((item, i) => (item, i)))
         {
-            CreateItem(item);
+            CreateItem(item, index);
         }
     }
 
-    private void CreateItem(InventoryItem item)
+    private void CreateItem(InventoryItem item, int index)
     {
-        //todo refactor this function -> divide into ItemUi
+        for (int i = item.Row; i < item.Row + item.Item.Height; i++)
+        {
+            for (int j = item.Col; j < item.Col + item.Item.Width; j++)
+            {
+                _itemIndexOnSlot[i, j] = index;
+            }
+        }
+
         UiPopup popup = UiManager.ShowPopupByName(nameof(InventoryItemUi));
         InventoryItemUi itemUi = popup.GetComponentInChildren<InventoryItemUi>();
-        itemUi.OnClickEvent += () => { OnItemClicked(itemUi); };
+        itemUi.OnDropItemEvent += OnDropItem;
+        itemUi.OnMoveItemEvent += OnItemMoved;
+        itemUi.OnItemSelected += OnItemSelected;
+        itemUi.Initialize(item.Item);
         Transform itemTransform = itemUi.transform;
         itemTransform.SetParent(items, false);
-        itemUi.ItemState = item;
 
         Vector2 itemPosition = GetItemLocalPosition(item.Row, item.Col, item.Item.Width, item.Item.Height);
         Vector3 scale = itemTransform.localScale;
@@ -84,69 +95,119 @@ public class InventorySlotLayoutUi : UiPopup
         itemTransform.localPosition = itemPosition;
     }
 
-    private void OnItemClicked(InventoryItemUi item)
+    private void OnItemSelected(InventoryItemUi item, Vector2 screenPointer)
     {
-        if (_selectedItem == item)
-        {
-            //where to position this function
-            if (IsInInventoryWindow())
-            {
-                //todo canPosition-> position else position to prev
-                int itemIndex = GetItemPositionIndex();
-                int row = itemIndex / maxRows;
-                int col = itemIndex % maxCols;
-                if (CanPosition(row, col, _selectedItem.ItemState.Item.Width, _selectedItem.ItemState.Item.Height))
-                {
-                    //밑에 물건이 깔린 경우
-                    if (IsCurrentSlotExists(row, col))
-                    {
-                        InventoryItemUi itemUi = _selectedItem;
-                        InventoryItemUi pointerItem = GetInventoryItemUiAt(row, col);
-                        if (pointerItem == null)
-                        {
-                            return;
-                        }
-                        _selectedItem = pointerItem;
-                        ChangePosition(itemUi, row, col);
-                    }
-                    else
-                    {
-                        ChangePosition(_selectedItem, row, col);
-                    }
+        _selectedItemData = item.ItemData;
+        //todo center Position...
+        _selectedItemStartIndex = GetInventoryPositionAt(screenPointer);
+        Debug.Log($"OnItemSelected-index is {_selectedItemStartIndex}");
+    }
 
-                    HideHoveredBlocks();
-                }
-                else
+    private void OnItemMoved(Vector2 position)
+    {
+        //todo
+        HideHoveredBlocks();
+        UpdateHoverInfo(position);
+        ShowHoveredBlocks();
+    }
+
+    private void UpdateHoverInfo(Vector2 position)
+    {
+        _hoverInfo = GetInventoryPositionAt(position);
+    }
+
+    private void OnDropItem(InventoryItemUi itemUi, Vector2 screenPointer)
+    {
+        Debug.Log($"dropItem - item start index is {_selectedItemStartIndex}");
+        HideHoveredBlocks();
+
+        //1. is in inventory Window
+        if (IsInInventoryWindow(screenPointer))
+        {
+            if (CanPosition(_hoverInfo.y, _hoverInfo.x, _selectedItemData.Width, _selectedItemData.Height))
+            {
+                Vector2 position = GetItemLocalPosition(
+                    row: _hoverInfo.y,
+                    col: _hoverInfo.x,
+                    width: _selectedItemData.Width,
+                    height: _selectedItemData.Height);
+                itemUi.transform.localPosition = position;
+
+                ChangePosition();
+                UpdateInventoryUiState();
+                for (int i = 0; i < maxRows; i++)
                 {
-                    //todo 현재 물건을 
+                    for (int j = 0; j < maxCols; j++)
+                    {
+                        Debug.Log($"({i}, {j}) : {_itemIndexOnSlot[i, j]}");
+                    }
                 }
             }
             else
             {
-                _inventoryManager.RemoveItem(item.ItemState);
-                item.gameObject.SetActive(false);
-                _selectedItem = null;
+                //원위치
+                Vector2 position = GetItemLocalPosition(
+                    row: _selectedItemStartIndex.y,
+                    col: _selectedItemStartIndex.x,
+                    width: _selectedItemData.Width,
+                    height: _selectedItemData.Height);
+                itemUi.transform.localPosition = position;
+                _selectedItemData = null;
+                _selectedItemStartIndex.x = -1;
+                _selectedItemStartIndex.y = -1;
             }
-
+        }
+        else
+        {
+            // 현재 아이템 버리기
+            itemUi.gameObject.SetActive(false);
+            _gameManager.DropInventoryItem(_itemIndexOnSlot[_selectedItemStartIndex.y, _selectedItemStartIndex.x]);
+        }
+    }
+    
+    private void ChangePosition()
+    {
+        if (_selectedItemData == null)
+        {
             return;
         }
-        _selectedItem = item;
-        item.SetSelected(true);
+
+        int index = _itemIndexOnSlot[_selectedItemStartIndex.y, _selectedItemStartIndex.x];
+        _inventoryManager.ChangePosition(index, _hoverInfo.y, _hoverInfo.x);
     }
 
-    private Vector2Int GetInventoryIndexVector(Vector2 position)
+    private void UpdateInventoryUiState()
     {
-        Vector2 localPosition = position - (Vector2)transform.position;
-        int x = (int)(localPosition.x / _gridLayout.cellSize.x);
-        int y = (int)(-localPosition.y / _gridLayout.cellSize.y);
-        return new Vector2Int(x, y);
+        Debug.Log("===update ui state===");
+        Debug.Log($"selectedItemStartIdx : {_selectedItemStartIndex}");
+        Debug.Log($"_hoverInfo : {_hoverInfo}");
+        Debug.Log("===update ui state===");
+
+        int itemIndex = _itemIndexOnSlot[_selectedItemStartIndex.y, _selectedItemStartIndex.x];
+        for (int i = _selectedItemStartIndex.y; i < _selectedItemStartIndex.y + _selectedItemData.Height; i++)
+        {
+            for (int j = _selectedItemStartIndex.x; j < _selectedItemStartIndex.x + _selectedItemData.Width; j++)
+            {
+                _itemIndexOnSlot[i, j] = -1;
+            }
+        }
+
+        for (int i = _hoverInfo.y; i < _hoverInfo.y + _selectedItemData.Height; i++)
+        {
+            for (int j = _hoverInfo.x; j < _hoverInfo.x + _selectedItemData.Width; j++)
+            {
+                _itemIndexOnSlot[i, j] = itemIndex;
+            }
+        }
+
+        _selectedItemStartIndex.y = -1;
+        _selectedItemStartIndex.x = -1;
+        _selectedItemData = null;
     }
 
     //아이템 생성, 위치 변경시 호출할 함수
     private Vector2 GetItemLocalPosition(int row, int col, int width, int height)
     {
-        //todo row, col -> getPosition
-        // todo 
         Vector2 cellSize = _gridLayout.cellSize;
         float xPos = cellSize.x * col + cellSize.x * 0.5f * width;
         float yPos = -cellSize.y * row - cellSize.y * 0.5f * height;
@@ -154,42 +215,27 @@ public class InventorySlotLayoutUi : UiPopup
         return new Vector2(xPos, yPos);
     }
 
-    //drag-drop 으로 아이템의 위치 변경시 호출
-    private void ChangePosition(InventoryItemUi inventoryItemUi, int row, int col)
-    {
-        _selectedItem = null;
-        inventoryItemUi.SetSelected(false);
-        inventoryItemUi.ItemState.Row = row;
-        inventoryItemUi.ItemState.Col = col;
-        Item item = inventoryItemUi.ItemState.Item;
-        Vector2 position = GetItemLocalPosition(row, col, item.Width, item.Height);
-        inventoryItemUi.transform.localPosition = position;
-    }
-
     private void ShowHoveredBlocks()
     {
-        if (_hoverInfo.Row == -1 || _hoverInfo.Col == -1)
+        if (_hoverInfo.y <= -1 || _hoverInfo.y >= maxRows || _hoverInfo.x >= maxCols || _hoverInfo.x <= -1)
         {
             return;
         }
 
-        //todo extract inline function
-        Item item = _selectedItem.ItemState.Item;
-        int startIndex = GetItemPositionIndex();
+        Item item = _selectedItemData;
         bool canPosition = CanPosition(
-            row: _hoverInfo.Row,
-            col: _hoverInfo.Col,
-            width: _selectedItem.ItemState.Item.Width,
-            height: _selectedItem.ItemState.Item.Height
+            row: _hoverInfo.y,
+            col: _hoverInfo.x,
+            width: item.Width,
+            height: item.Height
         );
-        Color color = canPosition ? canPositionColor : canNotPositionColor; // false
+        Color color = canPosition ? canPositionColor : canNotPositionColor;
 
-        for (int i = 0; i < item.Height; i++)
+        for (int i = _hoverInfo.y; i < _hoverInfo.y + item.Height && i < maxRows; i++)
         {
-            for (int j = 0; j < item.Width; j++)
+            for (int j = _hoverInfo.x; j < _hoverInfo.x + item.Width && j < maxCols; j++)
             {
-                int index = startIndex + i * maxCols + j;
-                Image img = _slots[index].ImageTransform;
+                Image img = _slots[i, j].ImageTransform;
                 img.color = color;
             }
         }
@@ -198,115 +244,82 @@ public class InventorySlotLayoutUi : UiPopup
 
     private void HideHoveredBlocks()
     {
-        if (_hoverInfo.Row == -1 || _hoverInfo.Col == -1)
+        if (_hoverInfo.y <= -1 || _hoverInfo.y >= maxRows || _hoverInfo.x >= maxCols || _hoverInfo.x <= -1)
         {
             return;
         }
 
-        if (_selectedItem == null)
+        Item item = _selectedItemData;
+        for (int i = _hoverInfo.y; i < _hoverInfo.y + item.Height && i < maxRows; i++)
         {
-            return;
-        }
-
-        int startIndex = GetItemPositionIndex();
-        Item item = _selectedItem.ItemState.Item;
-        for (int i = 0; i < item.Height; i++)
-        {
-            for (int j = 0; j < item.Width; j++)
+            for (int j = _hoverInfo.x; j < _hoverInfo.x + item.Width && j < maxCols; j++)
             {
-                //todo caching data into InventorySlotUi
-                int index = startIndex + i * maxCols + j;
-                Image img = _slots[index].ImageTransform;
+                Image img = _slots[i, j].ImageTransform;
                 img.color = Color.white;
             }
         }
     }
 
-    private int GetItemPositionIndex()
-    {
-        Item item = _selectedItem.ItemState.Item;
-        int row = _hoverInfo.Row;
-        int col = _hoverInfo.Col;
-        if ((row + item.Height - 1) >= maxRows)
-        {
-            // height, maxCols both are not zero based... -1 - (-1)
-            row = _hoverInfo.Row - ((_hoverInfo.Row + item.Height) - maxRows);
-        }
-
-        if ((col + item.Width - 1) >= maxCols)
-        {
-            // width, maxCols both are not zero based... -1 - (-1)
-            col = _hoverInfo.Col - ((_hoverInfo.Col + item.Width) - maxCols);
-        }
-
-        int startIndex = row * maxCols + col;
-        return startIndex;
-    }
-
-    public void OnPointerMove(Vector2 pointer)
-    {
-        _screenPoint = pointer;
-        if (_selectedItem == null)
-        {
-            return;
-        }
-
-        MoveSelectedItem(pointer);
-        Vector2Int term = GetInventoryIndexVector(pointer);
-        int row = term.y;
-        int col = term.x;
-        if (row >= maxRows || row < 0 || col >= maxCols || col < 0)
-        {
-            HideHoveredBlocks();
-            return;
-        }
-
-
-        HideHoveredBlocks();
-        _hoverInfo.Row = row;
-        _hoverInfo.Col = col;
-        ShowHoveredBlocks();
-    }
-
-    private void MoveSelectedItem(Vector2 position)
-    {
-        if (_selectedItem == null)
-        {
-            return;
-        }
-
-        _selectedItem.transform.position = position;
-    }
-
     private bool CanPosition(int row, int col, int width, int height)
     {
-        //todo
+        //현재 호버 위치에 1개의 아이템이 존재하면 false
+        int currentItemIndex = _itemIndexOnSlot[_selectedItemStartIndex.y, _selectedItemStartIndex.x];
+        for (int i = row; i < row + height; i++)
+        {
+            for (int j = col; j < col + width; j++)
+            {
+                if (_itemIndexOnSlot[i, j] != -1)
+                {
+                    if (_itemIndexOnSlot[i,j] != currentItemIndex)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
         return true;
     }
 
-    private bool IsCurrentSlotExists(int row, int col)
+    private Vector2Int GetInventoryPositionAt(Vector2 screenPosition)
     {
-        return _inventoryManager.Items
-            .Any(item => item.Row <= row && (item.Row + item.Item.Height) >= row && (item.Col) <= col &&
-                         (item.Col + item.Item.Width) >= col);
+        Vector2Int result;
+        if (IsInInventoryWindow(screenPosition))
+        {
+            var position = transform.position;
+            int x = (int)((screenPosition.x - position.x) / _gridLayout.cellSize.x);
+            int y = -(int)((screenPosition.y - position.y) / _gridLayout.cellSize.y);
+            result = new Vector2Int(x, y);
+        }
+        else
+        {
+            result = new Vector2Int(-1, -1);
+        }
+
+
+        if (result.x + _selectedItemData.Width >= maxCols)
+        {
+            result.x -= (result.x + _selectedItemData.Width - maxCols);
+        }
+
+        if (result.y + _selectedItemData.Height >= maxRows)
+        {
+            result.y -= (result.y + _selectedItemData.Height - maxRows);
+        }
+
+        return result;
     }
 
-    private bool IsInInventoryWindow()
+    private bool IsInInventoryWindow(Vector2 screenPosition)
     {
         Vector2 position = transform.position;
         RectTransform rectTransform = GetComponent<RectTransform>();
         Rect rect = rectTransform.rect;
         float width = rect.width;
         float height = rect.height;
-        return _screenPoint.x >= position.x &&
-               _screenPoint.x <= position.x + width &&
-               _screenPoint.y <= position.y &&
-               _screenPoint.y >= position.y - height;
-    }
-
-    public InventoryItemUi GetInventoryItemUiAt(int row, int col)
-    {
-        InventoryItemUi[] inventoryUiSet = items.GetComponentsInChildren<InventoryItemUi>();
-        return inventoryUiSet.FirstOrDefault(ui => ui.ItemState.IsPositionInItem(row, col));
+        return screenPosition.x >= position.x &&
+               screenPosition.x <= position.x + width &&
+               screenPosition.y <= position.y &&
+               screenPosition.y >= position.y - height;
     }
 }

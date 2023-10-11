@@ -1,14 +1,17 @@
 using System.Collections.Generic;
+using System.Linq;
+using Data;
 using DE.Util;
-using Model.LevelDesign;
+using Model.Item;
 
 namespace Managers
 {
     public class DataManager
     {
-        public List<TestData> LoadTestDataSet()
+        public List<InventoryItem> LoadTestDataSet()
         {
-            return CsvReader.ReadCsv<TestData>("test.csv", 1);
+            List<InventoryItemData> items = CsvReader.ReadCsv<InventoryItemData>("test.csv", 1);
+            return items.Select(data => data.ToDTO()).ToList();
         }
     }
 }
