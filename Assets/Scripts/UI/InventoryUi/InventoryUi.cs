@@ -1,13 +1,14 @@
-using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace UI.InventoryUi
 {
-    public class InventoryUi : UiPopup,IDragHandler,IBeginDragHandler,IEndDragHandler
+    public class InventoryUi : UiPopup, IDragHandler
     {
+        [SerializeField] private Canvas canvas;
         [SerializeField] private Button closeButton;
+        [SerializeField] private RectTransform rectTransform;
 
         private void Start()
         {
@@ -16,21 +17,12 @@ namespace UI.InventoryUi
 
         private void CloseInventory()
         {
-            transform.root.gameObject.SetActive(false);
+            gameObject.SetActive(false);
         }
+
         public void OnDrag(PointerEventData eventData)
         {
-            
-        }
-
-        public void OnBeginDrag(PointerEventData eventData)
-        {
-            
-        }
-
-        public void OnEndDrag(PointerEventData eventData)
-        {
-            
+            rectTransform.anchoredPosition += eventData.delta / canvas.scaleFactor;
         }
     }
 }

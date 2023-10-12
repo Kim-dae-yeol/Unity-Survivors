@@ -6,13 +6,13 @@ using UI;
 using UI.InteractableUi;
 using UnityEngine;
 
-public class InteractableUi : UiPopup
+public class HomeUi : UiPopup
 {
     private ProfileUi _profile;
     [SerializeField] private GameObject buttons;
     [SerializeField] private List<IconButtonInfo> iconInfos;
-
-    private void Start()
+    
+    private void OnEnable()
     {
         _profile = UiManager.ShowPopupByName(nameof(ProfileUi)).GetComponent<ProfileUi>();
         _profile.transform.SetParent(transform, false);

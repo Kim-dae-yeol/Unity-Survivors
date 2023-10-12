@@ -55,7 +55,7 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         //todo load ui per scene
-        // _uiManager.ShowPopupByName("InteractableUi");
+        _uiManager.ShowPopupByName(nameof(HomeUi));
     }
 
     private List<InventoryItem> GetItems()

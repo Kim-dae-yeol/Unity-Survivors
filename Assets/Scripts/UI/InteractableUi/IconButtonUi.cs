@@ -1,3 +1,4 @@
+using System;
 using Model.UI;
 using TMPro;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace UI.InteractableUi
         public Image icon;
         public Image background;
 
+        private UiPopup _popup;
         private string _popupName = string.Empty;
 
         public void SetInfo(IconButtonInfo info)
@@ -22,18 +24,28 @@ namespace UI.InteractableUi
             nameText.text = info.name;
             icon.sprite = info.icon;
             background.sprite = info.background;
-            button.onClick.AddListener(ShowPopupUi);
             _popupName = info.popupUiName;
+            button.onClick.AddListener(ShowPopupUi);
         }
 
         private void ShowPopupUi()
         {
+            if (_popup != null && _popup.gameObject.activeInHierarchy)
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(_popupName))
             {
                 return;
             }
 
-            UiManager.ShowPopupByName(_popupName);
+            _popup = UiManager.ShowPopupByName(_popupName);
+        }
+
+        protected override void OnDisable()
+        {
+            button.onClick.RemoveAllListeners();
         }
     }
 }

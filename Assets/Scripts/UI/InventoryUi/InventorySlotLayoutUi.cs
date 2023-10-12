@@ -1,4 +1,5 @@
 using System.Linq;
+using Di;
 using Managers;
 using Model.Item;
 using UI;
@@ -6,7 +7,11 @@ using UI.InventoryUi;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class InventorySlotLayoutUi : UiPopup
+//TODO Fix : 아이템 버릴 경우 버그 있음... 리팩토링 이후 버그 해결 해보기
+//TODO refactoring : 그리기만 하도록 변경, 상태는 모두 인벤토리 매니저에 저장-> 여기서 뺄 것 : itemIndexOnSlot,
+//변화가 있는 경우 인벤토리 매니저 내부 상태 전달 람다에 연결해서 ui 다시 그리기 
+//해당 이벤트는 Ui 액티브 false 시에 연결 해제 시켜야함
+public class InventorySlotLayoutUi : MonoBehaviour
 {
     [SerializeField] private int maxRows;
     [SerializeField] private int maxCols;
@@ -29,15 +34,16 @@ public class InventorySlotLayoutUi : UiPopup
 
     private InventoryManager _inventoryManager;
     private GameManager _gameManager;
+    private UiManager _uiManager;
 
-    protected override void Awake()
+    protected void Awake()
     {
-        base.Awake();
+        _uiManager = Container.RequireUiManager(this);
         _gameManager = GameManager.Instance;
         _gridLayout = GetComponent<GridLayoutGroup>();
     }
 
-    private void Start()
+    private void OnEnable()
     {
         _inventoryManager = GameManager.Instance.InventoryManager;
         _slots = new InventorySlotUi[maxRows, maxCols];
@@ -47,7 +53,7 @@ public class InventorySlotLayoutUi : UiPopup
         {
             for (int j = 0; j < maxCols; j++)
             {
-                InventorySlotUi slot = UiManager.ShowPopupByName(nameof(InventorySlotUi))
+                InventorySlotUi slot = _uiManager.ShowPopupByName(nameof(InventorySlotUi))
                     .GetComponent<InventorySlotUi>();
                 slot.transform.SetParent(_gridLayout.transform, false);
 
@@ -77,7 +83,7 @@ public class InventorySlotLayoutUi : UiPopup
             }
         }
 
-        UiPopup popup = UiManager.ShowPopupByName(nameof(InventoryItemUi));
+        UiPopup popup = _uiManager.ShowPopupByName(nameof(InventoryItemUi));
         InventoryItemUi itemUi = popup.GetComponentInChildren<InventoryItemUi>();
         itemUi.OnDropItemEvent += OnDropItem;
         itemUi.OnMoveItemEvent += OnItemMoved;
@@ -160,11 +166,25 @@ public class InventorySlotLayoutUi : UiPopup
         else
         {
             // 현재 아이템 버리기
-            itemUi.gameObject.SetActive(false);
-            _gameManager.DropInventoryItem(_itemIndexOnSlot[_selectedItemStartIndex.y, _selectedItemStartIndex.x]);
+            DumpItem(itemUi);
         }
     }
-    
+
+    private void DumpItem(InventoryItemUi itemUi)
+    {
+        for (int i = _selectedItemStartIndex.y; i < _selectedItemStartIndex.y + _selectedItemData.Height; i++)
+        {
+            for (int j = _selectedItemStartIndex.x; j < _selectedItemStartIndex.x + _selectedItemData.Width; j++)
+            {
+                _itemIndexOnSlot[i, j] = -1;
+            }
+        }
+
+        _selectedItemData = null;
+        itemUi.gameObject.SetActive(false);
+        _gameManager.DropInventoryItem(_itemIndexOnSlot[_selectedItemStartIndex.y, _selectedItemStartIndex.x]);
+    }
+
     private void ChangePosition()
     {
         if (_selectedItemData == null)
@@ -270,7 +290,7 @@ public class InventorySlotLayoutUi : UiPopup
             {
                 if (_itemIndexOnSlot[i, j] != -1)
                 {
-                    if (_itemIndexOnSlot[i,j] != currentItemIndex)
+                    if (_itemIndexOnSlot[i, j] != currentItemIndex)
                     {
                         return false;
                     }
