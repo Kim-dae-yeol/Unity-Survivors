@@ -6,6 +6,7 @@ using Di;
 using Managers;
 using Model.Item;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Util;
 
 [DefaultExecutionOrder(0)]
@@ -55,7 +56,15 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         //todo load ui per scene
-        _uiManager.ShowPopupByName(nameof(HomeUi));
+        SceneManager.sceneLoaded += ShowUi;
+    }
+
+    private void ShowUi(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "HomeScene")
+        {
+            _uiManager.ShowPopupByName(nameof(HomeUi));
+        }
     }
 
     private List<InventoryItem> GetItems()
